@@ -3,8 +3,11 @@ package main
 import (
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -43,32 +46,47 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusInternalServerError, "error forming file", err)
 		return
 	}
-	data, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "error reading file", err)
-		return
-	}
 
-	mediaType := header.Header.Get("Content-Type")
 	video_md, err := cfg.db.GetVideo(videoID)
 	if video_md.UserID != userID {
 		respondWithError(w, http.StatusUnauthorized, "unauthorized access", err)
 		return
 	}
+	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
 
-	tn := thumbnail{
-		mediaType: mediaType,
-		data:      data,
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error parsing media type", err)
+		return
 	}
 
-	videoThumbnails[videoID] = tn
+	if mediaType != "image/jpeg" && mediaType != "image/png" {
+		respondWithError(w, http.StatusNotAcceptable, "invalid file type for thumbail, please use image/jpeg or image/png", err)
+		return
+	}
+
+	fileName := fmt.Sprintf("%s.%s", videoID, strings.Split(mediaType, "/")[1])
+	filePath := filepath.Join(cfg.assetsRoot, fileName)
+	thumbailFile, err := os.Create(filePath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error creating file", err)
+		return
+	}
+	defer thumbailFile.Close()
+
+	_, err = io.Copy(thumbailFile, file)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error copying file", err)
+		return
+	}
+	defer file.Close()
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8091"
 	}
-	new_tnURL := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", port, videoID)
-	video_md.ThumbnailURL = &new_tnURL
+
+	newURL := fmt.Sprintf("http://localhost:%s/assets/%s", port, fileName)
+	video_md.ThumbnailURL = &newURL
 
 	err = cfg.db.UpdateVideo(video_md)
 	if err != nil {
@@ -76,5 +94,4 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	respondWithJSON(w, http.StatusOK, video_md)
-	defer r.Body.Close()
 }
