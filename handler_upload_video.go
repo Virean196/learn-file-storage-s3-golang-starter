@@ -58,7 +58,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
 	if mediaType != "video/mp4" {
-		respondWithError(w, http.StatusNotAcceptable, "invalid file type for thumbail, please use image/jpeg or image/png", err)
+		respondWithError(w, http.StatusNotAcceptable, "invalid file type for thumbail, please use video/mp4", err)
 		return
 	}
 
