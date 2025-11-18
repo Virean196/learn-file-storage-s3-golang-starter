@@ -77,7 +77,11 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	defer file.Close()
 
-	tempFile.Seek(0, io.SeekStart)
+	_, err = tempFile.Seek(0, io.SeekStart)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error seeking file", err)
+		return
+	}
 
 	randKey := make([]byte, 32)
 	rand.Read(randKey)
