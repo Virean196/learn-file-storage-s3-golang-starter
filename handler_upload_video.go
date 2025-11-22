@@ -67,6 +67,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "error creating temp file", err)
 		return
 	}
+
 	defer os.Remove(tempFile.Name())
 	defer tempFile.Close()
 
@@ -77,15 +78,32 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	defer file.Close()
 
+	aspect_ratio, err := getVideoAspectRatio(tempFile.Name())
+
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error getting aspect ratio", err)
+		return
+	}
+
 	_, err = tempFile.Seek(0, io.SeekStart)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "error seeking file", err)
 		return
 	}
 
+	var ratio_folder string
+
+	if aspect_ratio == "16:9" {
+		ratio_folder = "landscape"
+	} else if aspect_ratio == "9:16" {
+		ratio_folder = "portrait"
+	} else {
+		ratio_folder = "other"
+	}
+
 	randKey := make([]byte, 32)
 	rand.Read(randKey)
-	fileName := fmt.Sprintf("%s.%s", base64.RawURLEncoding.EncodeToString(randKey), strings.Split(mediaType, "/")[1])
+	fileName := fmt.Sprintf("%s/%s.%s", ratio_folder, base64.RawURLEncoding.EncodeToString(randKey), strings.Split(mediaType, "/")[1])
 
 	cfg.s3Client.PutObject(context.Background(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
