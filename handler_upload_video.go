@@ -93,11 +93,12 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	var ratio_folder string
 
-	if aspect_ratio == "16:9" {
+	switch aspect_ratio {
+	case "16:9":
 		ratio_folder = "landscape"
-	} else if aspect_ratio == "9:16" {
+	case "9:16":
 		ratio_folder = "portrait"
-	} else {
+	default:
 		ratio_folder = "other"
 	}
 
