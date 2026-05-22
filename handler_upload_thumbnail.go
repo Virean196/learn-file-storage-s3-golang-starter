@@ -1,10 +1,14 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -42,12 +46,33 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer file.Close()
 
-	mediaType := header.Header.Get("Content-Type")
-	data, err := io.ReadAll(file)
+	mediaType, _, err := mime.ParseMediaType(header.Header.Get("Content-Type"))
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Unable to read data from file", err)
+		respondWithError(w, http.StatusBadRequest, "Unable to parse media type", err)
 		return
 	}
+
+	if mediaType != "image/png" && mediaType != "image/jpeg" {
+		respondWithError(w, 400, "thumbnail must be image/png or image/jpeg", err)
+		return
+	}
+
+	extention := strings.Split(mediaType, "/")[1]
+	fileName := fmt.Sprintf("%s.%s", videoIDString, extention)
+	filePath := filepath.Join(cfg.assetsRoot, fileName)
+	thumbnailFile, err := os.Create(filePath)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unable to create thumbnail file", err)
+		return
+	}
+
+	_, err = io.Copy(thumbnailFile, file)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unable to copy thumbnail content to file", err)
+		log.Print("Error during copy")
+		return
+	}
+
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusNotFound, "No video found", err)
@@ -58,10 +83,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	tn := thumbnail{data, mediaType}
-	videoThumbnails[videoID] = tn
-
-	thumbailUrl := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoIDString)
+	thumbailUrl := fmt.Sprintf("http://localhost:%s/assets/%s", cfg.port, fileName)
 
 	video.ThumbnailURL = &thumbailUrl
 	err = cfg.db.UpdateVideo(video)
@@ -69,11 +91,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusConflict, "Unable to update video", err)
 		return
 	}
-	data, err = json.Marshal(video)
-	if err != nil {
-		respondWithError(w, http.StatusConflict, "Unable to marshal video data", err)
-		return
-	}
 
-	respondWithJSON(w, http.StatusOK, data)
+	respondWithJSON(w, http.StatusOK, thumbailUrl)
 }
