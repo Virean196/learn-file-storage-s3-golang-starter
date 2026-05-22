@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 
 	"github.com/joho/godotenv"
@@ -17,22 +20,22 @@ type apiConfig struct {
 	platform         string
 	filepathRoot     string
 	assetsRoot       string
+	s3Client         *s3.Client
 	s3Bucket         string
 	s3Region         string
 	s3CfDistribution string
 	port             string
 }
 
-type thumbnail struct {
+/* type thumbnail struct {
 	data      []byte
 	mediaType string
-}
+} */
 
 //var videoThumbnails = map[uuid.UUID]thumbnail{}
 
 func main() {
 	godotenv.Load(".env")
-
 	pathToDB := os.Getenv("DB_PATH")
 	if pathToDB == "" {
 		log.Fatal("DB_URL must be set")
@@ -83,6 +86,12 @@ func main() {
 		log.Fatal("PORT environment variable is not set")
 	}
 
+	awsCfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(s3Region))
+	if err != nil {
+		log.Fatal("Error loading AWS Config")
+	}
+	s3Client := s3.NewFromConfig(awsCfg)
+
 	cfg := apiConfig{
 		db:               db,
 		jwtSecret:        jwtSecret,
@@ -91,6 +100,7 @@ func main() {
 		assetsRoot:       assetsRoot,
 		s3Bucket:         s3Bucket,
 		s3Region:         s3Region,
+		s3Client:         s3Client,
 		s3CfDistribution: s3CfDistribution,
 		port:             port,
 	}
