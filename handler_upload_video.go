@@ -76,6 +76,17 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	defer tempFile.Close()
 
 	io.Copy(tempFile, videoFile)
+
+	processedVideoPath, err := processVideoForFastStart(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusNotAcceptable, "Video could not be processed", err)
+		return
+	}
+	processedVideo, err := os.Open(processedVideoPath)
+	if err != nil {
+		respondWithError(w, http.StatusNotAcceptable, "Unable to open processed video", err)
+		return
+	}
 	aspectRatio, err := getVideoAspectRatio(tempFile.Name())
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to get aspect ration for video", err)
@@ -95,7 +106,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	key := make([]byte, 32)
 	rand.Read(key)
 	hexKey := fmt.Sprintf("%s/%s.%s", prefix, hex.EncodeToString(key), strings.Split(mediaType, "/")[1])
-	cfg.s3Client.PutObject(context.Background(), &s3.PutObjectInput{Bucket: &cfg.s3Bucket, Key: &hexKey, Body: tempFile, ContentType: &mediaType})
+	cfg.s3Client.PutObject(context.Background(), &s3.PutObjectInput{Bucket: &cfg.s3Bucket, Key: &hexKey, Body: processedVideo, ContentType: &mediaType})
 	newVidUrl := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, hexKey)
 	video.VideoURL = &newVidUrl
 	err = cfg.db.UpdateVideo(video)
