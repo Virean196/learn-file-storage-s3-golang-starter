@@ -6,16 +6,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"mime"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
-	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -110,16 +107,15 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	rand.Read(key)
 	hexKey := fmt.Sprintf("%s/%s.%s", prefix, hex.EncodeToString(key), strings.Split(mediaType, "/")[1])
 	cfg.s3Client.PutObject(context.Background(), &s3.PutObjectInput{Bucket: &cfg.s3Bucket, Key: &hexKey, Body: processedVideo, ContentType: &mediaType})
-	/* newVidUrl := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, hexKey) */
-	newVidUrl := []string{cfg.s3Bucket, hexKey}
-	result := strings.Join(newVidUrl, ",")
-	video.VideoURL = &result
-	new_vid, err := cfg.dbVideoToSignedVideo(video)
+	newVidUrl := fmt.Sprintf("https://%s/%s", cfg.s3CfDistribution, hexKey)
+	//newVidUrl := []string{cfg.s3Bucket, hexKey}
+	//result := strings.Join(newVidUrl, ",")
+	video.VideoURL = &newVidUrl
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to create presigned url", err)
 		return
 	}
-	err = cfg.db.UpdateVideo(new_vid)
+	err = cfg.db.UpdateVideo(video)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Failed to update video", err)
 		return
@@ -127,7 +123,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 }
 
-func generatePresignedURL(s3client *s3.Client, bucket *string, key string, expireTime time.Duration) (string, error) {
+/* func generatePresignedURL(s3client *s3.Client, bucket *string, key string, expireTime time.Duration) (string, error) {
 	s3PresignClient := s3.NewPresignClient(s3client)
 	presignedRequest, err := s3PresignClient.PresignGetObject(context.Background(), &s3.GetObjectInput{Bucket: bucket, Key: &key}, s3.WithPresignExpires(expireTime))
 	if err != nil {
@@ -145,4 +141,4 @@ func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video
 	}
 	video.VideoURL = &presignedUrl
 	return video, nil
-}
+} */
